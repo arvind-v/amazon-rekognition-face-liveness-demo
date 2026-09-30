@@ -1,8 +1,10 @@
-import { Button, Flex, Radio, RadioGroupField, Text } from '@aws-amplify/ui-react'
+import { Button, CheckboxField, Flex, Radio, RadioGroupField, Text } from '@aws-amplify/ui-react'
 import { LAYOUT_OPTIONS, type LayoutMode } from '../layout'
 
 export interface CheckSettings {
   layout: LayoutMode
+  /** Show the framing step, where the camera zoom is set, before the check. */
+  preZoom: boolean
 }
 
 interface SetupPanelProps {
@@ -38,6 +40,13 @@ export function SetupPanel({ settings, mobile, onChange, onStart }: SetupPanelPr
           </Radio>
         ))}
       </RadioGroupField>
+
+      <CheckboxField
+        name="preZoom"
+        label="Frame and pre-zoom the camera before the check"
+        checked={settings.preZoom}
+        onChange={(event) => onChange({ ...settings, preZoom: event.target.checked })}
+      />
 
       <div>
         <Button variation="primary" onClick={onStart}>

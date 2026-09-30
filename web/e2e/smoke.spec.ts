@@ -39,15 +39,34 @@ async function stubBackend(page: Page) {
   })
 }
 
+/** Starts a check from the start screen, passing through the framing step. */
+async function startCheck(page: Page) {
+  await page.getByRole('button', { name: 'Start a liveness check' }).click()
+  await page.getByRole('button', { name: 'Continue to the check' }).click()
+}
+
 test.describe('with a stubbed backend', () => {
   test.skip(deployed, 'Runs only against the local preview server')
+
+  test('frames the camera before the check and explains a camera without zoom', async ({ page }) => {
+    await stubBackend(page)
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Start a liveness check' }).click()
+
+    await expect(page.getByRole('heading', { name: 'Frame your face' })).toBeVisible()
+    await expect(page.locator('.framing-preview video')).toBeVisible()
+    // Chromium's synthetic camera has no zoom control.
+    await expect(page.getByText('This camera has no zoom the browser can use')).toBeVisible()
+    await expect(page.getByRole('slider')).toHaveCount(0)
+  })
 
   test('streams the session to Rekognition in the configured region', async ({ page }) => {
     await stubBackend(page)
     const stream = page.waitForEvent('websocket')
 
     await page.goto('/')
-    await page.getByRole('button', { name: 'Start a liveness check' }).click()
+    await startCheck(page)
 
     const url = new URL((await stream).url())
     expect(url.host).toBe('streaming-rekognition.us-east-1.amazonaws.com')
@@ -77,7 +96,7 @@ test.describe('against a deployed stack', () => {
     )
 
     await page.goto('/')
-    await page.getByRole('button', { name: 'Start a liveness check' }).click()
+    await startCheck(page)
 
     expect((await sessionCreated).ok()).toBe(true)
     await expect(page.getByRole('button', { name: 'Start video check' })).toBeVisible({
@@ -97,7 +116,7 @@ test.describe('layouts against a deployed stack', () => {
     // The radio input is visually hidden, so choose it through its label.
     await page.getByText(layout, { exact: true }).click()
     await expect(page.getByRole('radio', { name: new RegExp(layout) })).toBeChecked()
-    await page.getByRole('button', { name: 'Start a liveness check' }).click()
+    await startCheck(page)
     await expect(page.getByRole('button', { name: 'Start video check' })).toBeVisible({
       timeout: 30_000,
     })

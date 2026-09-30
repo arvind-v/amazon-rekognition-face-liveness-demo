@@ -12,8 +12,18 @@ if (!HTMLDialogElement.prototype.showModal) {
   }
 }
 
+// Amplify UI's slider measures itself with ResizeObserver, which jsdom lacks.
+if (!('ResizeObserver' in globalThis)) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}
+
 afterEach(() => {
   cleanup()
+  Reflect.deleteProperty(navigator, 'mediaDevices')
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })

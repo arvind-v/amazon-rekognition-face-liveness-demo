@@ -21,8 +21,50 @@ body {
   max-width: 740px;
 }
 
-.setup {
+.setup,
+.framing {
   max-width: 740px;
+}
+
+/* Framing preview: mirrored like the liveness component's own view. */
+.framing-preview {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--amplify-colors-neutral-90);
+}
+
+.framing-preview video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: scaleX(-1);
+}
+
+.framing-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.framing-outline ellipse {
+  fill: none;
+  stroke: var(--amplify-colors-white);
+  stroke-width: 3;
+  stroke-dasharray: 2 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.framing-loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
 }
 
 .option-label {

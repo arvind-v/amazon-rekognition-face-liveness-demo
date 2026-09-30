@@ -79,6 +79,34 @@ The start screen offers four layouts so you can compare them:
 
 On phones the component switches to full screen once the check starts, whatever the container.
 
+### Reducing how far users have to move
+
+The check asks the user to move closer to the camera, and that movement is part of what it measures. Both of its distance checks compare the size of the face with the camera frame:
+
+1. Before recording, the face must be small enough, or the component asks the user to move back.
+2. During recording, the face must grow to fill an oval. Rekognition sets the oval's size, in camera pixels, for each session.
+
+The size of the video on screen plays no part in either check. With a wide-angle laptop camera, a face at a normal sitting distance is small in the frame, so users start far below the first limit and have to lean a long way in to reach the second.
+
+The demo adds a framing step before the check. It opens the camera, starts it zoomed to 1.5x, and shows an outline of the face size to aim for. The user adjusts the zoom so their face fills the outline from where they normally sit. The check then runs at that zoom, so the move-in starts near the first limit and ends farther from the screen. Some movement remains, because the check needs it.
+
+How it works (`web/src/zoom.ts`):
+
+- It uses the camera's own zoom (the `zoom` constraint on `MediaStreamTrack`), so Rekognition still receives the camera's frames. The liveness component opens its own camera stream, so the app wraps `getUserMedia` while the component is mounted and applies the zoom before the component sees a frame.
+- The zoom is fixed for the whole check. Changing it during the check would fake the movement the check measures.
+- Browsers offer zoom where the camera supports it: Chrome on Android, and webcams with a zoom control. Most built-in laptop cameras have none, and support in Safari on iPhone is unconfirmed. When there is no zoom, the framing step says so and the check runs at the camera's full view.
+- The outline's size comes from the component's own "move back" check: a face measure divided by the width of its start-screen oval must stay under a threshold that Rekognition sends with each session. The outline uses the value in the SDK's test data (0.4), with a 20% margin. It is a starting point, not a documented limit; tune it with real checks.
+
+Every result is logged with the zoom that was requested and applied, so you can compare scores with and without zoom:
+
+```text
+fields client.platform, client.zoomApplied, confidence, is_live
+| filter message = "liveness result"
+| stats count(*) as checks, avg(confidence) as avg_confidence by client.platform, client.zoomApplied
+```
+
+Run it in CloudWatch Logs Insights on the stack's `ApiLogs` log group.
+
 ## Test
 
 ```sh
@@ -97,7 +125,7 @@ BASE_URL=https://<your distribution>.cloudfront.net npm run test:e2e
 
 The backend tests stub Rekognition, so they need no AWS access. The infra tests check the synthesized template, including that neither IAM role can do more than its job. The web unit tests replace the liveness component with a stand-in and cover the flow around it.
 
-The browser tests use Chromium's synthetic camera. Against the local preview they stub the backend and Cognito and check that the liveness component opens its Rekognition stream with the right session and region. With `BASE_URL` they use the deployed stack: a real session reaches the camera screen, each layout gets the camera size it should, and the flash overlay covers the window except in the transform-centered modal. Neither can complete a check: that takes a real face.
+The browser tests use Chromium's synthetic camera. Against the local preview they stub the backend and Cognito, check the framing step, and check that the liveness component opens its Rekognition stream with the right session and region. The synthetic camera has no zoom control, so the zoom path is covered by unit tests with fake camera tracks and needs a real device to confirm. With `BASE_URL` they use the deployed stack: a real session reaches the camera screen, each layout gets the camera size it should, and the flash overlay covers the window except in the transform-centered modal. Neither can complete a check: that takes a real face.
 
 To smoke-test a deployed stack:
 

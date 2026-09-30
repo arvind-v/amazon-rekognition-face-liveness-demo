@@ -42,7 +42,7 @@ BASE_URL=https://<distribution>.cloudfront.net npm run test:e2e
 scripts/deploy.sh
 ```
 
-Run every suite a change can affect before committing. Web changes that touch the liveness component's placement or camera also need the deployed browser tests, because only a real session gets the component past its first screen.
+Run every suite a change can affect before committing. Chromium's synthetic camera has no zoom control, so browser tests only cover the no-zoom path; zoom logic is unit-tested with the fake tracks in `web/src/test/media.ts`. Web changes that touch the liveness component's placement or camera also need the deployed browser tests, because only a real session gets the component past its first screen.
 
 ## Facts about the SDK that drive the design
 
@@ -54,6 +54,8 @@ These are from reading the SDK source (`@aws-amplify/ui-react-liveness` 3.6.9). 
 - The colored flash overlay, and on phones the whole camera view, use `position: fixed`. A CSS transform on any ancestor turns that ancestor into their containing block, which misplaces them.
 - Sessions are single use. Every retry needs a new session from the backend.
 - The streaming region comes from `amplify_outputs.json` (`custom.liveness.region`) and must match the region the backend creates sessions in.
+- The component calls `navigator.mediaDevices.getUserMedia` itself when it mounts. The app applies the framing zoom by wrapping that call (`holdZoomForLiveness` in `web/src/zoom.ts`). Install the wrapper before the component mounts, which is why `App.startCheck` does it, and release it when the check ends. A parent `useEffect` runs after its children's effects, which is too late.
+- Before recording, the component rejects a face that is too close: `(2 x pupil distance + 1.8 x eye-to-mouth distance) / 4` divided by its start-screen oval width must stay under the session's `FaceDistanceThresholdMin`. `targetFaceWidth()` in `web/src/zoom.ts` uses 0.4, the value in the SDK's test data. Real sessions may differ.
 
 ## Conventions
 
