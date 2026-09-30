@@ -1,10 +1,13 @@
 import { Alert, Button, Flex, Heading, Loader, Text, ThemeProvider } from '@aws-amplify/ui-react'
 import { lazy, Suspense, useState } from 'react'
 import { createSession, getResults, type LivenessResult } from './api'
+import { LivenessStage } from './components/LivenessStage'
 import { ResultsView } from './components/ResultsView'
+import { SetupPanel, type CheckSettings } from './components/SetupPanel'
 import type { DemoConfig } from './config'
 import { clientContext } from './device'
 import { describeLivenessError } from './errors'
+import { defaultLayout, isMobileBrowser } from './layout'
 
 // The liveness SDK bundles TensorFlow.js, so load it only when a check starts.
 const LivenessCheck = lazy(() => import('./components/LivenessCheck'))
@@ -18,6 +21,10 @@ type Step =
 
 export function App({ config }: { config: DemoConfig }) {
   const [step, setStep] = useState<Step>({ name: 'start' })
+  const [mobile] = useState(() => isMobileBrowser())
+  const [settings, setSettings] = useState<CheckSettings>(() => ({
+    layout: defaultLayout(mobile),
+  }))
 
   async function startCheck() {
     setStep({ name: 'creating' })
@@ -32,7 +39,8 @@ export function App({ config }: { config: DemoConfig }) {
     // An error thrown from here would surface inside the liveness component
     // as a generic server error, so report it in the app's own error view.
     try {
-      setStep({ name: 'result', result: await getResults(sessionId, clientContext()) })
+      const context = clientContext({ layout: settings.layout })
+      setStep({ name: 'result', result: await getResults(sessionId, context) })
     } catch (error) {
       setStep({ name: 'error', message: messageOf(error) })
     }
@@ -47,21 +55,18 @@ export function App({ config }: { config: DemoConfig }) {
         </header>
 
         {step.name === 'start' && (
-          <Flex direction="column" alignItems="flex-start" gap="medium">
-            <Text>
-              The check records a short video selfie. Face a well-lit wall and turn your screen
-              brightness up.
-            </Text>
-            <Button variation="primary" onClick={startCheck}>
-              Start a liveness check
-            </Button>
-          </Flex>
+          <SetupPanel
+            settings={settings}
+            mobile={mobile}
+            onChange={setSettings}
+            onStart={startCheck}
+          />
         )}
 
         {step.name === 'creating' && <Loader size="large" aria-label="Creating a session" />}
 
         {step.name === 'check' && (
-          <div className="liveness-container">
+          <LivenessStage mode={settings.layout} onClose={() => setStep({ name: 'start' })}>
             <Suspense fallback={<Loader size="large" aria-label="Loading the liveness check" />}>
               <LivenessCheck
                 sessionId={step.sessionId}
@@ -71,7 +76,7 @@ export function App({ config }: { config: DemoConfig }) {
                 onCancel={() => setStep({ name: 'start' })}
               />
             </Suspense>
-          </div>
+          </LivenessStage>
         )}
 
         {step.name === 'result' && (

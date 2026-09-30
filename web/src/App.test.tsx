@@ -90,4 +90,27 @@ describe('App', () => {
 
     expect(await screen.findByText('Rekognition is throttling requests')).toBeInTheDocument()
   })
+
+  it('opens the check in a dialog by default on desktop', async () => {
+    stubFetch({ body: { sessionId: SESSION_ID } })
+    render(<App config={config} />)
+
+    await user.click(screen.getByRole('button', { name: 'Start a liveness check' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Liveness check' })
+    expect(dialog).toContainElement(await screen.findByTestId('detector'))
+  })
+
+  it('reports the chosen layout with the result', async () => {
+    const { request } = stubFetch({ body: { sessionId: SESSION_ID } }, { body: passingResult() })
+    render(<App config={config} />)
+
+    await user.click(screen.getByRole('radio', { name: /Inline in the page/ }))
+    await user.click(screen.getByRole('button', { name: 'Start a liveness check' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'finish' }))
+    await screen.findByText('Status: SUCCEEDED')
+
+    expect(request(1).body.client.layout).toBe('inline')
+  })
 })

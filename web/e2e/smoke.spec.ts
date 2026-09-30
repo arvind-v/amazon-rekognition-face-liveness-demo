@@ -86,3 +86,59 @@ test.describe('against a deployed stack', () => {
     await expect(page.locator('video')).toBeVisible()
   })
 })
+
+test.describe('layouts against a deployed stack', () => {
+  test.skip(!deployed, 'Set BASE_URL to a deployed site')
+  // A 13-inch MacBook browser window.
+  test.use({ viewport: { width: 1436, height: 895 } })
+
+  async function openCheck(page: Page, layout: string) {
+    await page.goto('/')
+    // The radio input is visually hidden, so choose it through its label.
+    await page.getByText(layout, { exact: true }).click()
+    await expect(page.getByRole('radio', { name: new RegExp(layout) })).toBeChecked()
+    await page.getByRole('button', { name: 'Start a liveness check' }).click()
+    await expect(page.getByRole('button', { name: 'Start video check' })).toBeVisible({
+      timeout: 30_000,
+    })
+  }
+
+  // The component's colored flash overlay is a position: fixed canvas that is
+  // hidden until the flashes start. Unhiding it briefly shows the box it fills.
+  function flashOverlayBox(page: Page) {
+    return page.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('.amplify-liveness-freshness-canvas')!
+      canvas.hidden = false
+      const { x, y, width, height } = canvas.getBoundingClientRect()
+      canvas.hidden = true
+      return { x, y, width, height }
+    })
+  }
+
+  test('the responsive modal fits the window and gives the camera most of it', async ({ page }) => {
+    await openCheck(page, 'Modal sized to the screen')
+
+    const video = (await page.locator('video').boundingBox())!
+    const dialog = (await page.getByRole('dialog', { name: 'Liveness check' }).boundingBox())!
+    expect(video.width).toBeGreaterThan(700)
+    expect(dialog.y + dialog.height).toBeLessThanOrEqual(895)
+    expect(await flashOverlayBox(page)).toEqual({ x: 0, y: 0, width: 1436, height: 895 })
+  })
+
+  test('the small modal reproduces a small camera view', async ({ page }) => {
+    await openCheck(page, 'Small fixed modal')
+
+    const video = (await page.locator('video').boundingBox())!
+    expect(video.width).toBeLessThanOrEqual(280)
+  })
+
+  test('a transform-centered modal confines the flash overlay to the panel', async ({ page }) => {
+    await openCheck(page, 'Modal centered with a CSS transform')
+
+    const panel = (await page.getByRole('dialog', { name: 'Liveness check' }).boundingBox())!
+    const overlay = await flashOverlayBox(page)
+    expect(overlay.width).toBeLessThan(1436)
+    expect(overlay.x).toBeCloseTo(panel.x, 0)
+    expect(overlay.y).toBeCloseTo(panel.y, 0)
+  })
+})

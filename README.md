@@ -60,6 +60,25 @@ LIVENESS_SITE_URL=https://<your distribution>.cloudfront.net npm run dev
 
 The dev server forwards `/api` and `/amplify_outputs.json` to that site. Browsers only allow camera access on `localhost` or HTTPS, so to test on a phone, use the deployed `SiteUrl`.
 
+### Sizing the liveness view
+
+The liveness component has no size settings. It fills the width of its container, sets its video to 4:3, and draws its oval once when the check starts. Its colored flash overlay, and on phones the whole camera view, are positioned against the browser window with `position: fixed`. That leads to three rules:
+
+1. Give the component as much width as the window allows at 4:3, and fix it before the check starts. A small container gives a small camera view, even on a large screen.
+2. Don't resize the container during the check. The oval stays where it was first drawn.
+3. Center modals without CSS transforms. A `transform` on any ancestor, such as the common `translate(-50%, -50%)`, makes that ancestor the reference box for `position: fixed`, so the flash overlay is drawn inside the modal instead of over the window. A native `<dialog>` is centered by the browser without one.
+
+The start screen offers four layouts so you can compare them:
+
+| Layout | What it shows |
+|---|---|
+| Modal sized to the screen (default on desktop) | The fix: a native `<dialog>` sized by `fitLivenessWidth()` in `web/src/layout.ts` |
+| Inline in the page (default on phones) | The component in the page column |
+| Small fixed modal | A 280 px camera view, as in a crowded sign-in dialog |
+| Modal centered with a CSS transform | The overlay problem from rule 3 |
+
+On phones the component switches to full screen once the check starts, whatever the container.
+
 ## Test
 
 ```sh
@@ -78,7 +97,7 @@ BASE_URL=https://<your distribution>.cloudfront.net npm run test:e2e
 
 The backend tests stub Rekognition, so they need no AWS access. The infra tests check the synthesized template, including that neither IAM role can do more than its job. The web unit tests replace the liveness component with a stand-in and cover the flow around it.
 
-The browser tests use Chromium's synthetic camera. Against the local preview they stub the backend and Cognito and check that the liveness component opens its Rekognition stream with the right session and region. With `BASE_URL` they use the deployed stack and check that a real session reaches the camera screen. Neither can complete a check: that takes a real face.
+The browser tests use Chromium's synthetic camera. Against the local preview they stub the backend and Cognito and check that the liveness component opens its Rekognition stream with the right session and region. With `BASE_URL` they use the deployed stack: a real session reaches the camera screen, each layout gets the camera size it should, and the flash overlay covers the window except in the transform-centered modal. Neither can complete a check: that takes a real face.
 
 To smoke-test a deployed stack:
 
@@ -110,3 +129,4 @@ This is a demo. The API has no authentication: anyone with the URL can create se
 | `infra/` | CDK app and template tests |
 | `web/` | React web app, unit tests and browser tests |
 | `scripts/` | Deploy script |
+| `AGENTS.md` | Notes for coding agents working in this repo |
