@@ -1,6 +1,2 @@
-virtualenv
-boto3
-setuptools
-aws-cdk-lib 
-constructs
-aws_cdk.aws_amplify_alpha
+aws-cdk-lib==2.272.0
+constructs==10.8.1

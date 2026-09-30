@@ -1,113 +1,94 @@
-# Amazon Rekognition Face Liveness
+# Amazon Rekognition Face Liveness demo
 
-A sample code to implement Amazon Rekognition Face Liveness to detect real users and deter bad actors using spoofs in seconds during facial verification.
+A working Face Liveness setup you can deploy to your own AWS account in one command: a backend that creates liveness sessions and scores them, plus clients that run the check with the AWS Amplify liveness SDKs.
 
-## What is Amazon Rekognition Face Liveness?
-[Amazon Rekognition Face Liveness](https://aws.amazon.com/rekognition/face-liveness/) helps you verify that a user going through facial verification is physically present in front of a camera. It detects spoof attacks presented to a camera or trying to bypass a camera. Users can complete a Face Liveness check by taking a short video selfie where they follow a series of prompts intended to verify their presence.
+[Amazon Rekognition Face Liveness](https://aws.amazon.com/rekognition/face-liveness/) verifies that the person in front of the camera is physically present. The user records a short video selfie while following on-screen prompts, and Rekognition returns a confidence score that the video shows a live person rather than a spoof.
 
-We can easily add Face Liveness to the React web, native iOS, and native Android applications using open-source AWS Amplify SDKs.Face Liveness uses ML models trained on diverse datasets to support high accuracy across user skin tones, ancestries, and devices.
+## How it works
+
+1. The client asks the backend to create a session (`CreateFaceLivenessSession`) and gets a session ID.
+2. The Amplify liveness component opens the camera, guides the user, and streams the video straight to Rekognition (`StartFaceLivenessSession`). It signs that stream with short-lived guest credentials from a Cognito identity pool; the guest role can call nothing else.
+3. When the component finishes, the client asks the backend for the result. The backend calls `GetFaceLivenessSessionResults`, compares the confidence score with the configured threshold, and returns pass or fail, the score, feedback codes and the reference image.
+
+The pass or fail decision is made in the backend so every client applies the same threshold.
 
 ## Architecture
 
-![RekognitionLivenessArchitectureDeveloperGuide_v2.jpg](https://docs.aws.amazon.com/images/rekognition/latest/dg/images/RekognitionLivenessArchitectureDeveloperGuide_v2.jpg)
+One CDK stack (`infra/`) creates:
 
-## Components
-Face Liveness uses multiple components:
+| Resource | Purpose |
+|---|---|
+| CloudFront distribution | Serves the web app and `amplify_outputs.json`, and forwards `/api/*` to the API, so everything shares one HTTPS origin |
+| S3 bucket (private) | Holds the web app, readable only by CloudFront |
+| API Gateway HTTP API | `POST /api/sessions` and `POST /api/sessions/{sessionId}/results`, throttled to 10 requests per second |
+| Lambda function (Python 3.13, arm64) | Calls Rekognition; may only create sessions and read their results |
+| Cognito identity pool | Issues guest credentials whose only permission is `rekognition:StartFaceLivenessSession` |
+| Cognito user pool | Not used for sign-in; the Amplify Swift and Android config formats require one |
 
-* AWS Amplify SDK with FaceLivenessDetector component
-* AWS SDKs
-* AWS Cloud APIs
+`amplify_outputs.json` is generated at deploy time and holds everything a client needs: region, identity pool, API URL and threshold.
 
+## Deploy
 
-When we configure our application to integrate with Face Liveness feature, it uses the following API operations:
-
-* CreateFaceLivenessSession - Starts a Face Liveness session, letting the Face Liveness detection model be used in your application. Returns a SessionId for the created session.
-
-* StartFaceLivenessSession - Called by the AWS Amplify FaceLivenessDetector. Starts an event stream containing information about relevant events and attributes in the current session.
-
-* GetFaceLivenessSessionResults - Retrieves the results of a specific Face Liveness session, including a Face Liveness confidence score, reference image, and audit images.
-
-## Prerequisites
-
+Prerequisites: an AWS account with credentials configured for the CLI, Python 3.13, Node.js 24, and Docker (optional; used only if pip cannot bundle the Lambda dependencies locally). Face Liveness is available in a limited set of regions; this README uses `us-east-1`.
 
 ```sh
-# Setup the AWS CLI
-aws configure                                                                     
+cd infra
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+export AWS_REGION=us-east-1
+npx aws-cdk@2 bootstrap            # once per account and region
+npx aws-cdk@2 deploy
 ```
 
-Locally installing on a workstation requires the following steps. 
+The deploy prints `SiteUrl` and `AmplifyOutputsUrl`. Settings are CDK context values:
 
-1. Locally install AWS CDK as the [official documentation](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html) describes.
-2. [Bootstrap CDK for AWS Account](https://github.com/aws/aws-cdk/blob/master/design/cdk-bootstrap.md) 
-3. Install Python >=3.6 from [python.org](http://python.org/)
-4. Create a Python virtual environment
-  ```sh
-  python3 -m venv .venv                                      
-  ```
+| Setting | Default | Example |
+|---|---|---|
+| `confidenceThreshold` | `70` | `npx aws-cdk@2 deploy -c confidenceThreshold=80` |
+| `stackName` | `FaceLivenessDemo` | `npx aws-cdk@2 deploy -c stackName=FaceLivenessDemo-dev` |
 
-5. Activate virtual environment
-  On MacOS or Linux
-  ```sh
-  source .venv/bin/activate                                       
-  ```
-  On Windows
-  ```sh
-    .venv\Scripts\activate.bat                                        
-  ```
+The threshold is a demo default, not an AWS recommendation. Choose yours from your own false accept and false reject targets.
 
-
-
-## Solution Deployment
-
-The [one-click.sh](https://github.com/aws-samples/amazon-rekognition-face-liveness/blob/main/one-click.sh) utility script is the recommended procedure for deploying a Rekognition Face Liveness(rfl) stack into an AWS Account.  It automates every step including installing missing dependency and executing all Out-Of-Band (OOB) operations.  Additionally, there is support for upgrading existing environments and seamlessly handling any future requirements.  
-
-
-This table enumerates the overridable environment variables.  The deployment script supports deploying multiple stacks within the same account and region (e.g., Prod and Dev in us-east-1).  Additionally, the default settings support 200M unique faces.  Please contact us at rekognition-identity-verification@amazon.com for instructions beyond this threshold.  Lastly, AWS CloudFormation requires the Amazon S3 bucket and deployment region are the same.  When these values differ the *create-stack* command fails with a descriptive error.
+## Test
 
 ```sh
+cd backend && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt && python -m pytest
 
-# Customers can deploy multiple instances to the same region (Prod vs Dev)
-# If this value is not set then it defaults to 'Rfl-Prod'
-# You control this functionality by setting the Landing Zone Name value
-export RFL_STACK_NAME=Rfl-Prod
-
-# Running this command will install any dependencies (brew, yum, or apt required)
-# After preparing the local machine it will synthesize and deploy into your environment.
-./one-click.sh
+cd ../infra && source .venv/bin/activate
+pip install -r requirements-dev.txt && python -m pytest
 ```
 
+The backend tests stub Rekognition, so they need no AWS access. The infra tests check the synthesized template, including that neither IAM role can do more than its job.
 
-## How do I run the amplify app locally
-#First create a .env.local file in the frontend directory with the following contents:
+To smoke-test a deployed stack:
 
-```
-REACT_APP_ENV_API_URL=https://YOUR_API_GW_STAGE_URL
-REACT_APP_IDENTITYPOOL_ID=AMAZON_COGNITO_IDENTITYPOOL_ID
-REACT_APP_REGION=AMAZON_COGNITO_APP_REGION
-REACT_APP_USERPOOL_ID=AMAZON_COGNITO_APP_USERPOOL_ID
-REACT_APP_WEBCLIENT_ID=AMAZON_COGNITO_APP_WEBCLIENT_ID
-
-
+```sh
+SITE=https://<your distribution>.cloudfront.net
+SESSION=$(curl -s -X POST "$SITE/api/sessions" | jq -r .sessionId)
+curl -s -X POST "$SITE/api/sessions/$SESSION/results" | jq '{status, confidence, isLive}'
 ```
 
-#Install depedency and start the app
+A new session reports `CREATED` with no score.
 
+## Clean up
+
+```sh
+cd infra && npx aws-cdk@2 destroy
 ```
-npm install
-npm start
 
-```
+Everything in the stack is deleted, including the site bucket and logs.
 
+## Security notes
 
-## How is the code organized
+This is a demo. The API has no authentication: anyone with the URL can create sessions, which is why the stage is throttled. Session results, including the reference image, can be read by anyone who has the session ID. Before using this pattern in production, put the API behind your own authentication and tie each session to the user who created it.
 
+## Code layout
 
-- [infra](infra).  CDK Automation for provisioning the environment(s)
-  - [facelivenessbackend](infra/facelivenessbackend/).  The RFL backend
-  - [frontend](infra/frontend/). React Frontend Web App infra for Amazon Rekognition Face Liveness
-- [src](src).  The backing code for Lambdas functions and other compute constructs
-  - [liveness-session-result](src/backend/start-liveness-session/).  Backent to start the Face Liveness Session
-  - [liveness-session-result](src/backend/liveness-session-result/).  Backent to get the Face Liveness Session Result
-  - [frontend](src/frontend).  React Frontend Web App for Amazon Rekognition Face Liveness
-
-
+| Path | Contents |
+|---|---|
+| `backend/` | Lambda handler and its tests |
+| `infra/` | CDK app and template tests |
+| `src/frontend/` | React web app |
