@@ -1,6 +1,6 @@
 import { Alert, Button, Flex, Heading, Loader, Text, ThemeProvider } from '@aws-amplify/ui-react'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { createSession, getResults, type LivenessResult } from './api'
+import { createSession, getResults, type ClientContext, type LivenessResult } from './api'
 import { CameraFraming, type FramingChoice } from './components/CameraFraming'
 import { LivenessStage } from './components/LivenessStage'
 import { ResultsView } from './components/ResultsView'
@@ -19,7 +19,7 @@ type Step =
   | { name: 'framing' }
   | { name: 'creating' }
   | { name: 'check'; sessionId: string }
-  | { name: 'result'; result: LivenessResult }
+  | { name: 'result'; result: LivenessResult; context: ClientContext }
   | { name: 'error'; message: string }
 
 export function App({ config }: { config: DemoConfig }) {
@@ -28,6 +28,7 @@ export function App({ config }: { config: DemoConfig }) {
   const [settings, setSettings] = useState<CheckSettings>(() => ({
     layout: defaultLayout(mobile),
     preZoom: true,
+    auditImagesLimit: 0,
   }))
   const framing = useRef<FramingChoice | null>(null)
   const appliedZoom = useRef<number | null>(null)
@@ -45,7 +46,10 @@ export function App({ config }: { config: DemoConfig }) {
   async function startCheck() {
     setStep({ name: 'creating' })
     try {
-      const sessionId = await createSession()
+      const sessionId = await createSession({
+        challengeType: settings.challengeType,
+        auditImagesLimit: settings.auditImagesLimit,
+      })
       // Installed before the component mounts, so its first frame is zoomed.
       const zoom = framing.current?.zoom
       appliedZoom.current = null
@@ -75,13 +79,14 @@ export function App({ config }: { config: DemoConfig }) {
     try {
       const context = clientContext({
         layout: settings.layout,
+        challengeRequested: settings.challengeType ?? 'service default',
         preZoom: settings.preZoom,
         zoomSupported: Boolean(framing.current?.zoomRange),
         zoomMax: framing.current?.zoomRange?.max ?? null,
         zoomRequested: framing.current?.zoom ?? null,
         zoomApplied: appliedZoom.current,
       })
-      setStep({ name: 'result', result: await getResults(sessionId, context) })
+      setStep({ name: 'result', result: await getResults(sessionId, context), context })
     } catch (error) {
       setStep({ name: 'error', message: messageOf(error) })
     }
@@ -126,7 +131,11 @@ export function App({ config }: { config: DemoConfig }) {
         )}
 
         {step.name === 'result' && (
-          <ResultsView result={step.result} onRestart={() => setStep({ name: 'start' })} />
+          <ResultsView
+            result={step.result}
+            context={step.context}
+            onRestart={() => setStep({ name: 'start' })}
+          />
         )}
 
         {step.name === 'error' && (

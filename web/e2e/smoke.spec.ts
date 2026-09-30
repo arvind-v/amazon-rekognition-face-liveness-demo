@@ -90,6 +90,25 @@ test.describe('with a stubbed backend', () => {
 test.describe('against a deployed stack', () => {
   test.skip(!deployed, 'Set BASE_URL to a deployed site')
 
+  test('the chosen challenge reaches Rekognition', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel('Challenge').selectOption('FaceMovementChallenge')
+    await startCheck(page)
+
+    await expect(page.getByRole('button', { name: 'Start video check' })).toBeVisible({
+      timeout: 30_000,
+    })
+    // Only the light challenge warns about flashing colors.
+    await expect(page.getByText('Photosensitivity warning')).toHaveCount(0)
+  })
+
+  test('without a preference Rekognition picks the light challenge', async ({ page }) => {
+    await page.goto('/')
+    await startCheck(page)
+
+    await expect(page.getByText('Photosensitivity warning')).toBeVisible({ timeout: 30_000 })
+  })
+
   test('reaches the camera screen with a real session', async ({ page }) => {
     const sessionCreated = page.waitForResponse(
       (response) => response.url().endsWith('/api/sessions') && response.request().method() === 'POST',

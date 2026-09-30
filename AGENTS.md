@@ -53,6 +53,7 @@ These are from reading the SDK source (`@aws-amplify/ui-react-liveness` 3.6.9). 
 - The component fills the width of its container, sets the video to 4:3, and draws the oval once when the check starts. It does not follow resizes.
 - The colored flash overlay, and on phones the whole camera view, use `position: fixed`. A CSS transform on any ancestor turns that ancestor into their containing block, which misplaces them.
 - Sessions are single use. Every retry needs a new session from the backend.
+- The light challenge's start screen shows a photosensitivity warning; the movement-only challenge's does not. The deployed browser tests use that to check which challenge a session got. Without `ChallengePreferences`, Rekognition has chosen the light challenge in every test so far.
 - The streaming region comes from `amplify_outputs.json` (`custom.liveness.region`) and must match the region the backend creates sessions in.
 - The component calls `navigator.mediaDevices.getUserMedia` itself when it mounts. The app applies the framing zoom by wrapping that call (`holdZoomForLiveness` in `web/src/zoom.ts`). Install the wrapper before the component mounts, which is why `App.startCheck` does it, and release it when the check ends. A parent `useEffect` runs after its children's effects, which is too late.
 - Before recording, the component rejects a face that is too close: `(2 x pupil distance + 1.8 x eye-to-mouth distance) / 4` divided by its start-screen oval width must stay under the session's `FaceDistanceThresholdMin`. `targetFaceWidth()` in `web/src/zoom.ts` uses 0.4, the value in the SDK's test data. Real sessions may differ.
@@ -62,5 +63,6 @@ These are from reading the SDK source (`@aws-amplify/ui-react-liveness` 3.6.9). 
 - Pin exact dependency versions (`package.json`, `requirements*.txt`). npm warns that `@xstate/react` 3, a dependency of the Amplify UI packages, declares React 18 as its peer. Amplify supports React 19; the warning is expected.
 - The backend bundles its own boto3 so it can parse newer result fields such as `Feedback`; the Lambda runtime's copy may be older.
 - The backend decides pass or fail. Clients display the backend's `isLive` and never apply the threshold themselves.
+- Results screens show the fields in the backend's response (`web/src/api.ts` `LivenessResult`). Feedback-code tips live in `web/src/feedback.ts`; the native apps should reuse the same wording.
 - Commit messages: an imperative subject under 72 characters, then a body saying what changed and why. No emojis, no tool or agent trailers.
 - Update `README.md` in the same commit as the change it describes.

@@ -62,8 +62,8 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'finish' }))
 
-    expect(await screen.findByText('Status: SUCCEEDED')).toBeInTheDocument()
-    expect(screen.getByText('Confidence: 92.35%')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Live person' })).toBeInTheDocument()
+    expect(screen.getByText(/Confidence 92.35%/)).toBeInTheDocument()
     expect(screen.getByRole('img', { name: /reference image/i })).toHaveAttribute(
       'src',
       'data:image/jpeg;base64,aGVsbG8=',
@@ -126,7 +126,7 @@ describe('App', () => {
     await startCheck()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'finish' }))
-    await screen.findByText('Status: SUCCEEDED')
+    await screen.findByRole('heading', { name: 'Live person' })
 
     expect(request(1).body.client.layout).toBe('inline')
   })
@@ -143,7 +143,7 @@ describe('App', () => {
     await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2))
     expect(getUserMedia.mock.calls[1][0]).toMatchObject({ video: { zoom: true } })
     await user.click(screen.getByRole('button', { name: 'finish' }))
-    await screen.findByText('Status: SUCCEEDED')
+    await screen.findByRole('heading', { name: 'Live person' })
 
     expect(request(1).body.client).toMatchObject({
       preZoom: true,
@@ -163,5 +163,29 @@ describe('App', () => {
 
     expect(await screen.findByTestId('detector')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Frame your face' })).not.toBeInTheDocument()
+  })
+
+  it('creates the session with the chosen challenge and audit images', async () => {
+    const { request } = stubFetch({ body: { sessionId: SESSION_ID } }, { body: passingResult() })
+    render(<App config={config} />)
+
+    await user.selectOptions(screen.getByLabelText('Challenge'), 'FaceMovementChallenge')
+    await user.selectOptions(screen.getByLabelText('Audit images'), '2')
+    await startCheck()
+    await user.click(await screen.findByRole('button', { name: 'finish' }))
+    await screen.findByRole('heading', { name: 'Live person' })
+
+    expect(request(0).body).toEqual({ challengeType: 'FaceMovementChallenge', auditImagesLimit: 2 })
+    expect(request(1).body.client.challengeRequested).toBe('FaceMovementChallenge')
+  })
+
+  it('lets Rekognition choose the challenge by default', async () => {
+    const { request } = stubFetch({ body: { sessionId: SESSION_ID } })
+    render(<App config={config} />)
+
+    await startCheck()
+    await screen.findByTestId('detector')
+
+    expect(request(0).body).toEqual({ auditImagesLimit: 0 })
   })
 })

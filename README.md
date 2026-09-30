@@ -107,6 +107,26 @@ fields client.platform, client.zoomApplied, confidence, is_live
 
 Run it in CloudWatch Logs Insights on the stack's `ApiLogs` log group.
 
+### Reading the score
+
+After each check the results screen shows what the backend returned:
+
+| Field | Meaning |
+|---|---|
+| Pass or fail | `isLive`: the session `SUCCEEDED` and the confidence is at or above the threshold. The backend decides it, so every client uses the same threshold |
+| Confidence | Rekognition's 0 to 100 score that the video shows a live person |
+| Threshold | `confidenceThreshold` from the deploy. AWS publishes no standard value; pick yours from your false accept and false reject targets |
+| Feedback | Codes such as `LOW_LIGHTING_DETECTED` that Rekognition returns with low scores, with a tip for each (`web/src/feedback.ts`) |
+| Challenge | The challenge the session actually ran |
+| Reference and audit images | The best frame, plus up to four more if requested, for manual review |
+
+The start screen sets two session options:
+
+- Challenge. Without a preference, Rekognition picked the face movement and light challenge in every test so far. Choose "Face movement only" to skip the colored flashes. Web pages can't raise screen brightness, so on the light challenge the page asks the user to turn it up.
+- Audit images. Returning a few frames per session lets you review borderline scores by hand while you calibrate the threshold.
+
+The demo shows the raw score so you can compare settings. A production app should show only pass or fail, and should decide it on the server.
+
 ## Test
 
 ```sh
@@ -125,7 +145,7 @@ BASE_URL=https://<your distribution>.cloudfront.net npm run test:e2e
 
 The backend tests stub Rekognition, so they need no AWS access. The infra tests check the synthesized template, including that neither IAM role can do more than its job. The web unit tests replace the liveness component with a stand-in and cover the flow around it.
 
-The browser tests use Chromium's synthetic camera. Against the local preview they stub the backend and Cognito, check the framing step, and check that the liveness component opens its Rekognition stream with the right session and region. The synthetic camera has no zoom control, so the zoom path is covered by unit tests with fake camera tracks and needs a real device to confirm. With `BASE_URL` they use the deployed stack: a real session reaches the camera screen, each layout gets the camera size it should, and the flash overlay covers the window except in the transform-centered modal. Neither can complete a check: that takes a real face.
+The browser tests use Chromium's synthetic camera. Against the local preview they stub the backend and Cognito, check the framing step, and check that the liveness component opens its Rekognition stream with the right session and region. The synthetic camera has no zoom control, so the zoom path is covered by unit tests with fake camera tracks and needs a real device to confirm. With `BASE_URL` they use the deployed stack: a real session reaches the camera screen, the chosen challenge reaches Rekognition, each layout gets the camera size it should, and the flash overlay covers the window except in the transform-centered modal. Neither can complete a check: that takes a real face.
 
 To smoke-test a deployed stack:
 
