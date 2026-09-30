@@ -32,24 +32,33 @@ One CDK stack (`infra/`) creates:
 Prerequisites: an AWS account with credentials configured for the CLI, Python 3.13, Node.js 24, and Docker (optional; used only if pip cannot bundle the Lambda dependencies locally). Face Liveness is available in a limited set of regions; this README uses `us-east-1`.
 
 ```sh
-cd infra
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
 export AWS_REGION=us-east-1
-npx aws-cdk@2 bootstrap            # once per account and region
-npx aws-cdk@2 deploy
+npx aws-cdk@2 bootstrap     # once per account and region
+scripts/deploy.sh
 ```
 
-The deploy prints `SiteUrl` and `AmplifyOutputsUrl`. Settings are CDK context values:
+`scripts/deploy.sh` builds the web app, creates `infra/.venv` if needed, and runs `cdk deploy`. It prints `SiteUrl`; open it on a desktop browser or a phone. Arguments after the script name go to `cdk deploy`. Settings are CDK context values:
 
 | Setting | Default | Example |
 |---|---|---|
-| `confidenceThreshold` | `70` | `npx aws-cdk@2 deploy -c confidenceThreshold=80` |
-| `stackName` | `FaceLivenessDemo` | `npx aws-cdk@2 deploy -c stackName=FaceLivenessDemo-dev` |
+| `confidenceThreshold` | `70` | `scripts/deploy.sh -c confidenceThreshold=80` |
+| `stackName` | `FaceLivenessDemo` | `scripts/deploy.sh -c stackName=FaceLivenessDemo-dev` |
 
 The threshold is a demo default, not an AWS recommendation. Choose yours from your own false accept and false reject targets.
+
+## Web app
+
+`web/` is a Vite, React and TypeScript app built on `@aws-amplify/ui-react-liveness`. It reads `/amplify_outputs.json` at startup, so the same build works against any deployed stack.
+
+To work on it locally against a deployed stack:
+
+```sh
+cd web
+npm install
+LIVENESS_SITE_URL=https://<your distribution>.cloudfront.net npm run dev
+```
+
+The dev server forwards `/api` and `/amplify_outputs.json` to that site. Browsers only allow camera access on `localhost` or HTTPS, so to test on a phone, use the deployed `SiteUrl`.
 
 ## Test
 
@@ -59,9 +68,17 @@ pip install -r requirements-dev.txt && python -m pytest
 
 cd ../infra && source .venv/bin/activate
 pip install -r requirements-dev.txt && python -m pytest
+
+cd ../web
+npm run lint && npm test && npm run build
+npx playwright install chromium   # once
+npm run test:e2e
+BASE_URL=https://<your distribution>.cloudfront.net npm run test:e2e
 ```
 
-The backend tests stub Rekognition, so they need no AWS access. The infra tests check the synthesized template, including that neither IAM role can do more than its job.
+The backend tests stub Rekognition, so they need no AWS access. The infra tests check the synthesized template, including that neither IAM role can do more than its job. The web unit tests replace the liveness component with a stand-in and cover the flow around it.
+
+The browser tests use Chromium's synthetic camera. Against the local preview they stub the backend and Cognito and check that the liveness component opens its Rekognition stream with the right session and region. With `BASE_URL` they use the deployed stack and check that a real session reaches the camera screen. Neither can complete a check: that takes a real face.
 
 To smoke-test a deployed stack:
 
@@ -76,7 +93,7 @@ A new session reports `CREATED` with no score.
 ## Clean up
 
 ```sh
-cd infra && npx aws-cdk@2 destroy
+cd infra && source .venv/bin/activate && npx aws-cdk@2 destroy
 ```
 
 Everything in the stack is deleted, including the site bucket and logs.
@@ -91,4 +108,5 @@ This is a demo. The API has no authentication: anyone with the URL can create se
 |---|---|
 | `backend/` | Lambda handler and its tests |
 | `infra/` | CDK app and template tests |
-| `src/frontend/` | React web app |
+| `web/` | React web app, unit tests and browser tests |
+| `scripts/` | Deploy script |

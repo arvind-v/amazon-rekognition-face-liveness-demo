@@ -1,0 +1,42 @@
+body {
+  margin: 0;
+  background: var(--amplify-colors-background-primary);
+  color: var(--amplify-colors-font-primary);
+  font-family: var(--amplify-fonts-default-variable);
+}
+
+.app {
+  box-sizing: border-box;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.app-header {
+  margin-bottom: 1.5rem;
+}
+
+.liveness-container {
+  width: 100%;
+  max-width: 740px;
+}
+
+.results {
+  max-width: 740px;
+}
+
+.reference-image {
+  max-width: 320px;
+  border-radius: 8px;
+}
+
+.session-id {
+  font-family: var(--amplify-fonts-default-static);
+  font-size: var(--amplify-font-sizes-small);
+  overflow-wrap: anywhere;
+}
+
+.config-error {
+  margin: 2rem;
+  font-family: system-ui, sans-serif;
+}
